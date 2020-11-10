@@ -19,6 +19,10 @@
         }
 
         var form = document.forms.namedItem('upload_form')
+        document.getElementById('inputFile').addEventListener('change', function(ev){
+            webCamPhoto = null
+            console.log('change')
+        })
 
         form.addEventListener('submit', function(ev) {
             const url = '/upload';
@@ -26,10 +30,7 @@
 
             var data = new FormData(form);
 
-            if(data.get('file')){
-                webCamPhoto = data.get('file')
-            }
-            else if (webCamPhoto!=null){
+            if (webCamPhoto!=null){
                 data.set('file', webCamPhoto, 'photo.jpg')
                 console.log(data)
                 console.log(data.get('file'))
@@ -280,12 +281,12 @@
         <div class="row justify-content-center">
             <form name='upload_form' action='' method='post' enctype='multipart/form-data'>
                 <div class="form-group text-center">
-                    <input class='mt-3 nav-link mr-3 form-control-file' type='file' name='file'>
+                    <input class='mt-3 nav-link mr-3 form-control-file' id="inputFile" type='file' name='file'>
                     <input class="btn btn-secondary mt-3 text-center" id="upload" type='submit' value='Отправить'>
                 </div>
             </form>
         </div>
-        <div id='infoBlock' class="col-8"></div>
+        <div id='infoBlock' class="col-8 text-center"></div>
 
 
         <div class="camera row justify-content-center">
