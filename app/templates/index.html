@@ -1,0 +1,499 @@
+{% extends "base.html" %}
+{% from 'bootstrap/form.html' import render_form %}
+
+{% block app_content %}
+
+<script>
+        var webCamPhoto = null;
+
+        document.addEventListener("DOMContentLoaded", () => {
+
+        var toggleButton =  document.getElementById('toggleCameraButton')
+        toggleButton.onclick = function(ev){
+            startCapture()
+            ev.preventDefault()
+            toggleButton.textContent = "Выключить камеру"
+
+            document.getElementsByClassName('loaded-image-card')[0].removeAttribute('hidden')
+            document.getElementsByClassName('camera-image-card')[0].removeAttribute('hidden')
+        }
+
+        var form = document.forms.namedItem('upload_form')
+
+        form.addEventListener('submit', function(ev) {
+            const url = '/upload';
+            console.log('Sending data');
+
+            var data = new FormData(form);
+
+            if(data.get('file')){
+                webCamPhoto = data.get('file')
+            }
+            else if (webCamPhoto!=null){
+                data.set('file', webCamPhoto, 'photo.jpg')
+                console.log(data)
+                console.log(data.get('file'))
+            }
+            draw_load(data.get('file'));
+
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", url, true);
+            //request to processing service
+            xhr.onload = function(oEvent) {
+                var infoBlock = document.getElementById('infoBlock')
+                clear_node(infoBlock)
+
+                if (xhr.status == 200) {
+                    xhr.innerHTML = "Uploaded!";
+                    var response = JSON.parse(xhr.response)
+                    if (response['resized']==0){
+
+                        var infoBlock = document.getElementById('infoBlock')
+                        var text = document.createElement('h3')
+                        text.className = "text-center m-1"
+                        text.textContent = "Лица не распознаны. Попробуйте загрузить другое фото."
+                        infoBlock.appendChild(text)
+
+                    }else{
+                        let canvases = draw_image(response['faces'])
+                        for(canv of canvases){
+                            create_card(canv.toDataURL())
+                        }                    
+                        prediction(response['resized'], response['faces'])
+                    }
+
+                } else {
+                    xhr.innerHTML = "Error " + xhr.status + " occurred when trying to upload your file.<br \/>";
+                }
+            };
+            xhr.send(data);
+            ev.preventDefault();
+
+        }, false)
+    })
+
+    function clear_node(node){
+        while (node.firstChild) {
+            node.removeChild(node.firstChild);
+        }
+    }
+
+    function prediction(faces, orig){
+
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", '/predict', true);
+            xhr.setRequestHeader("content-type", "application/json")
+            //request to tensorflow model
+            xhr.onload = function(oEvent) {
+                if (xhr.status == 200) {
+                    xhr.innerHTML = "Uploaded!";
+                    let response = JSON.parse(xhr.response)
+
+                    let canvases = draw_image(orig)
+                    let i = 0
+                    data = convert_predictions(response)
+                    for(canv of canvases){
+                        create_card(canv.toDataURL(), data['age'][i], data['gender'][i], data['ethnicity'][i])
+                        i += 1;
+                    }
+
+
+                } else {
+                    xhr.innerHTML = "Error " + xhr.status + " occurred when trying predict.<br \/>";
+                }
+            };
+
+            xhr.send(JSON.stringify(faces));
+    }
+
+    function convert_predictions(data){
+        console.log(data)
+        let ethnicity = []
+        let age = []
+        let gender = []
+
+        let codes = {
+            0:'Европеец',
+            1:'Афроамериканец',
+            2:'Азиат',
+            3:'Индианец',
+            4:'Латинец',
+        }
+
+        for (var i=0; i<data['ethnicity_model']['predictions'].length; i++){
+            ethnicity.push(data['ethnicity_model']['predictions'][i])
+            age.push(parseInt(data['age_model']['predictions'][i]))
+            gender.push(data['gender_model']['predictions'][i])
+
+            if (gender[i] > 0.55){
+                gender[i] = 'Женский'
+            }
+            else{
+                gender[i] = 'Мужской'
+            }
+    
+            let max = -Infinity;
+            let index = -1; 
+    
+            for (pred of ethnicity[i]){
+                if (pred > max){
+                    max = i;
+                    index += 1;
+                }
+            }
+            ethnicity[i] = codes[index]
+        }
+
+        return {'age':age, 'gender':gender, 'ethnicity':ethnicity}
+    }
+
+    function draw_load(file){
+        
+        var div = document.getElementsByClassName('loaded-image-card')[0]
+        div.removeAttribute('hidden')
+        create_card(null)
+
+        var img = document.getElementById('loaded-image')
+        var url = URL.createObjectURL(file)
+        img.className = 'card-img-top'
+        img.src = url
+    }
+
+    function draw_image(faces){
+        
+        var text = document.getElementById('detect-faces-text')
+        text.textContent = 'Распознанные лица'
+
+        var div = document.getElementById('detect-faces')
+
+        clear_node(div)
+
+        let canvases = [];
+        for(var index=0; index < faces.length; index++){
+            var face = faces[index];
+            var width = face[0].length;
+            var height = face[1].length;
+
+            buffer = new Uint8ClampedArray(width * height * 4); // have enough bytes
+
+            for(var y = 0; y < height; y++) {
+                for(var x = 0; x < width; x++) {
+                    var pos = (y * width + x) * 4; // position in buffer based on x and y
+                    buffer[pos] = face[y][x][0];  // some R value [0, 255]
+                    buffer[pos+1] = face[y][x][1];  // some G value
+                    buffer[pos+2] = face[y][x][2];  // some B value
+                    buffer[pos+3] = 255;           // set alpha channel
+                }
+            }
+
+            var canvas = document.createElement('canvas');
+            ctx = canvas.getContext('2d');
+            canvas.width = width;
+            canvas.height = height;
+            // create imageData object
+            var idata = ctx.createImageData(width, height);
+            // set our buffer as source
+            idata.data.set(buffer);
+            // update canvas with new data
+            ctx.putImageData(idata, 0, 0);
+            canvases.push(canvas)
+        }
+        
+        return canvases
+    }
+
+    function create_card(imgUrl, age=null, gender=null, etn=null){
+        var div = document.createElement('div')
+        div.className='card m-3 mb-5'
+        div.style.width = '11rem'
+        if (imgUrl!=null){
+            var img = document.createElement('img')
+            img.className = 'card-img-top'
+            img.src = imgUrl
+            div.appendChild(img)
+        }
+
+        var innerDiv = document.createElement('div')
+        innerDiv.className = 'card-body'
+        var h5 = document.createElement('h5')
+        h5.className = 'card-title'
+        h5.textContent = 'Распознанное лицо'
+        innerDiv.appendChild(h5)
+
+        var p = document.createElement('p')
+        p.className = 'card-text'
+        p.textContent = 'Результаты распознавания'
+        innerDiv.appendChild(p)
+
+        var divIndoc = document.getElementById('detect-faces')
+
+        if(age!=null){
+            var ul = document.createElement('ul')
+            ul.className = 'list-group list-group-flush'
+
+            var li = document.createElement('li')
+            li.className = 'list-group-item'
+            li.textContent = 'Возраст ' + age
+            ul.appendChild(li)
+
+            var li = document.createElement('li')
+            li.className = 'list-group-item'
+            li.textContent = 'Пол ' + gender
+            ul.appendChild(li)
+
+            var li = document.createElement('li')
+            li.className = 'list-group-item'
+            li.textContent = 'Этничность ' + etn
+            ul.appendChild(li)
+
+            div.appendChild(ul)
+        }else{
+            // loading widget
+            var _img = document.createElement('img')
+            _img.className = "card-img-top"
+            _img.src = "{{ url_for('static', filename='loading.gif') }}"
+            div.appendChild(_img)
+        }
+
+        divIndoc.appendChild(div)
+
+    }
+
+</script>
+
+    <div class="col">
+        <h2 class="text-center mt-4 mb-3">Добавьте файл</h2>
+        <div class="row justify-content-center">
+            <div class="col-8">
+                <h4 class="text-center m-1">
+                    Тестовый сервис анализа изображений.
+                    Для начала работы загрузите любую фотографию 
+                    на которой присутствуют лица людей. 
+                    Предпочтительно чтобы фото было сделано в анфас.
+                    Свет, ракурс и положение лица может влиять 
+                    на результаты распознавания.
+                    Все функции сервиса являются тестовыми.
+                </h4>
+            </div>
+        </div>
+        
+        <div class="row justify-content-md-center">
+            <form name='upload_form' action='' method='post' enctype='multipart/form-data'>
+                <div class="row form-group">
+                    <input class='mt-3 nav-link mr-3' type='file' name='file'>
+                    <input class="btn btn-secondary mt-3 nav-link" id="upload" type='submit' value='Отправить'>
+                </div>
+            </form>
+        </div>
+        <div id='infoBlock' class="col-8"></div>
+
+
+        <div class="camera row justify-content-md-center">
+            <button id="takePhoto" class="btn btn-primary mr-3 mt-3 nav-link">Сделать фото
+                <i class="icon-user icon-white">
+                    <img height="25rem" width="30rem" src="{{url_for('static', filename='icon/camera_icon.svg')}}">
+                </i>
+            </button>
+            <button id="toggleCameraButton" class="btn btn-primary mt-3 ">Включить камеру</button>
+        </div>
+
+        <div class="contentarea">
+            
+        </div>
+
+        <canvas id="canvas" hidden></canvas>
+
+
+        <br>
+         
+
+        <div class="row justify-content-md-center">
+            <div class="row justify-content-md-center mr-3 camera-image-card" hidden>
+                <div class="card" style="width: 20rem;">
+                    <video id="video">Video stream not available.</video>
+                    <div class="card-body">
+                      <h5 class="card-title">Камера</h5>
+                    </div>
+                </div>
+            </div>
+    
+            <div class="row justify-content-md-center ml-3 loaded-image-card" hidden>
+                <div class="card" style="width: 20rem;">
+                    <img id="loaded-image" class="card-img-top" src="" alt="Card image cap">
+                    <div class="card-body">
+                      <h5 class="card-title">Загруженное фото</h5>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+
+        <br>
+        <h2 id='detect-faces-text' class="text-center mb-3"></h2>
+        <div id="detect-faces" class="row justify-content-md-center">
+
+        </div> 
+    </div>
+
+
+    
+
+  
+  <script>
+      
+      function startCapture() {
+          // The width and height of the captured photo. We will set the
+          // width to the value defined here, but the height will be
+          // calculated based on the aspect ratio of the input stream.
+        
+          var width = 320;    // We will scale the photo width to this
+          var height = 0;     // This will be computed based on the input stream
+        
+          // |streaming| indicates whether or not we're currently streaming
+          // video from the camera. Obviously, we start at false.
+        
+          var streaming = false;
+        
+          // The various HTML elements we need to configure or control. These
+          // will be set by the startup() function.
+        
+          var video = null;
+          var canvas = null;
+          var photo = null;
+          var takePhoto = null;
+        
+          startup()
+  
+          function startup() {
+            video = document.getElementById('video');
+            canvas = document.getElementById('canvas');
+            photo = document.getElementById('loaded-image');
+            takePhoto = document.getElementById('takePhoto');
+        
+            var toggleButton = document.getElementById("toggleCameraButton");          
+        
+            navigator.mediaDevices.getUserMedia({video: true, audio: false})
+            .then(function(stream) {
+               // toggle button
+               toggleButton.onclick = function(){
+                stream.getTracks().forEach(function(track) {
+                    if (track.readyState == 'live' && track.kind === 'video') {
+                        track.stop();
+                    }
+                    
+                });
+                toggleButton.textContent = "Включить камеру"
+                document.getElementsByClassName('camera-image-card')[0].setAttribute('hidden', '')
+
+
+
+                toggleButton.onclick = function(ev){
+                    startCapture()
+                    ev.preventDefault()
+                    toggleButton.textContent = "Выключить камеру"
+
+                    document.getElementsByClassName('loaded-image-card')[0].removeAttribute('hidden')
+                    document.getElementsByClassName('camera-image-card')[0].removeAttribute('hidden')
+
+                }
+               }
+
+              video.srcObject = stream;
+              video.play();
+            })
+            .catch(function(err) {
+              console.log("An error occurred: " + err);
+            });
+        
+            video.addEventListener('canplay', function(ev){
+              if (!streaming) {
+                height = video.videoHeight / (video.videoWidth/width);
+              
+                // Firefox currently has a bug where the height can't be read from
+                // the video, so we will make assumptions if this happens.
+              
+                if (isNaN(height)) {
+                  height = width / (4/3);
+                }
+              
+                video.setAttribute('width', width);
+                video.setAttribute('height', height);
+                canvas.setAttribute('width', width);
+                canvas.setAttribute('height', height);
+                streaming = true;
+              }
+            }, false);
+        
+            takePhoto.addEventListener('click', function(ev){
+              takepicture();
+              ev.preventDefault();
+            }, false);
+            
+            clearphoto();
+          }
+        
+          // Fill the photo with an indication that none has been
+          // captured.
+        
+          function clearphoto() {
+            var context = canvas.getContext('2d');
+            context.fillStyle = "#AAA";
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            
+            var data = canvas.toDataURL('image/png');
+            
+            photo.setAttribute('src', data);
+          }
+          
+          // Capture a photo by fetching the current contents of the video
+          // and drawing it into a canvas, then converting that to a PNG
+          // format data URL. By drawing it on an offscreen canvas and then
+          // drawing that to the screen, we can change its size and/or apply
+          // other changes before drawing it.
+        
+          function takepicture() {
+            var context = canvas.getContext('2d');
+            if (width && height) {
+              canvas.width = width;
+              canvas.height = height;
+              context.drawImage(video, 0, 0, width, height);
+            
+              var data = canvas.toDataURL('image/png');
+        
+              webCamPhoto = dataURItoBlob(data);
+        
+              photo.setAttribute('src', data);
+
+              document.getElementsByClassName('loaded-image-card')[0].removeAttribute('hidden')
+            } else {
+              clearphoto();
+            }
+          }
+        
+          // Set up our event listener to run the startup process
+          // once loading is complete.
+          //window.addEventListener('load', startup, false);
+        };
+        
+        function dataURItoBlob(dataURI) {
+            // convert base64 to raw binary data held in a string
+            // doesn't handle URLEncoded DataURIs - see SO answer #6850276 for code that does this
+            var byteString = atob(dataURI.split(',')[1]);
+        
+            // separate out the mime component
+            var mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0];
+        
+            // write the bytes of the string to an ArrayBuffer
+            var ab = new ArrayBuffer(byteString.length);
+            var ia = new Uint8Array(ab);
+            for (var i = 0; i < byteString.length; i++) {
+                ia[i] = byteString.charCodeAt(i);
+            }
+            //New Code
+            return new Blob([ab], {type: mimeString});
+        }
+        
+
+  </script>
+
+{% endblock %}

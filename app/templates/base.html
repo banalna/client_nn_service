@@ -1,0 +1,55 @@
+<!doctype html>
+<html>
+    <head>
+        {% block head %}
+        <!-- Required meta tags -->
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+        <link rel="icon" href="{{url_for('static', filename='icon/favicon.ico')}}">
+            {% block styles %}
+                <!-- Bootstrap CSS -->
+                {{ bootstrap.load_css(version='4.5.0') }}
+                <link rel="stylesheet" href="{{url_for('static', filename='bootstrap.css')}}">
+            {% endblock %}
+        
+            {% block scripts %}
+                <!-- Optional JavaScript -->
+                {{ bootstrap.load_js(version='4.5.0', jquery_version='3.5.1', popper_version='1.16.0', with_jquery=True, with_popper=True) }}
+
+            <title>
+                FaceDetector
+            </title>
+
+            {% endblock %}
+        {% endblock %}
+    </head>
+    <body>
+        <!-- Your page content -->
+        <div class="container">
+            <nav class="navbar navbar-expand-lg navbar-light bg-light">
+                <a class="navbar-brand" href="{{ url_for('/.index') }}">
+                    <i class="user-icon">
+                        <img height="35rem" width="35rem" src="{{url_for('static', filename='icon/smile.svg')}}">
+                    </i>
+                    FaceDetector
+                </a>
+                <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon"></span>
+                </button>
+            
+                <div class="collapse navbar-collapse" style="font-size: 12pt;" id="navbarSupportedContent">
+                  <ul class="navbar-nav mr-auto">
+                    <!-- <li class="nav-item p-1 text-center">
+                      <a class="btn btn-outline-primary" href="{{ url_for('/.index') }}">Главная</a>
+                    </li> -->
+                    <!-- <li class="nav-item p-1 text-center">
+                        <a class="btn btn-outline-warning" href="#">'Explore'</a>
+                    </li> -->
+                  </ul>
+                </div>
+            </nav>
+                {% block app_content %}{% endblock %}
+        </div>
+        </div>
+    </body>
+</html>
