@@ -1,10 +1,8 @@
 # -*- coding: utf-8 -*-
 
 from app.factory import create_app
-from app import cli 
 
 app = create_app()
-cli.register(app)
 
 
 # @_app.shell_context_processor
