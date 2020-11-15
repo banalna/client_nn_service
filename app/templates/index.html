@@ -172,8 +172,14 @@
         let canvases = [];
         for(var index=0; index < faces.length; index++){
             var face = faces[index];
-            var width = face[0].length;
-            var height = face[1].length;
+            var width,height;
+            if (face.length < face[0].length){
+                width = face.length
+                height = face.length
+            } else { 
+                width = face[0].length
+                height = face[0].length
+            }
 
             buffer = new Uint8ClampedArray(width * height * 4); // have enough bytes
 
