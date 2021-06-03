@@ -1,6 +1,6 @@
 FROM python:3.8-slim-buster
 
-WORKDIR /home/client_service
+WORKDIR /app/client_service
 
 # for openCV
 # RUN apt-get update && \
@@ -28,9 +28,9 @@ ENV FLASK_APP run_app.py
 # RUN chown -R processing:processing ./
 # USER processing
 
-EXPOSE 5000
-ENTRYPOINT []
+# ENTRYPOINT []
 # ENTRYPOINT ["./run.sh"]
-CMD ["/home/client_service/run.sh"]
+# CMD ["/app/client_service/run.sh"]
 # CMD ["./run.sh"]
-# CMD ["python", "./run_app.py"]
+ENTRYPOINT ["python"]
+CMD ["./run_app.py"]
